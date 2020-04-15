@@ -1,6 +1,7 @@
 """program is about hired by Stevens Institute of Technology to create a data repository of courses, students, and instructors. """
 
 import os
+import sqlite3
 from prettytable import PrettyTable
 from collections import defaultdict
 from typing import Dict,Set,List,Iterator,Tuple,DefaultDict
@@ -10,22 +11,26 @@ class Repository:
     
     """ Repository to store information of students and instructors """
 
-    def __init__(self, dire : str, p : bool)->None:
+    def __init__(self, dire : str, p : bool,db_path : str)->None:
         """ Initialize directory and dictionary """
-        s1 : str='students10.txt'
-        i1 : str='instructors10.txt'
-        g1 : str='grades10.txt'
-        m1 : str='majors10.txt'
+        s1 : str='students11.txt'
+        i1 : str='instructors11.txt'
+        g1 : str='grades11.txt'
+        m1 : str='majors11.txt'
         self._dire :str = dire
+        self.db_path : str = db_path
         self._studs :Dict[str , List[str, Studs]]= dict()
         self._insts :Dict[str ,List[str, Insts]]= dict()
         self._majord :Dict[str ,List[str, MajorC]]= dict()
+        
 
         try:
+            self._student_summaty_grade(os.path.join(dire, self.db_path))
             self._get_major(os.path.join(dire, m1))
             self._get_studs(os.path.join(dire, s1))
             self._get_insts(os.path.join(dire, i1))
             self._get_grades(os.path.join(dire, g1))
+            
             
         except FileNotFoundError as f:
             raise FileNotFoundError(f)
@@ -34,11 +39,12 @@ class Repository:
                 self.studs_table()
                 self.insts_table()
                 self.major_table()
+                self.student_grade_table()
 
     def _get_studs(self, path : str):
         """ Student detail are read using file reading gen and added to dictionary """
         try:
-            for cwid, name, major in file_reader(path, 3, sep=';', header=True):
+            for cwid, name, major in file_reader(path, 3, sep='\t', header=True):
                 if major not in self._majord:
                     print(f"Student {cwid} '{name}' has unknown major '{major}'")
                 else:
@@ -52,7 +58,7 @@ class Repository:
     def _get_insts(self, path : str)->None:
         """ take instructor details from the path and add to it """
         try:
-            for cwid, name, dept in file_reader(path, 3, sep='|', header=True):
+            for cwid, name, dept in file_reader(path, 3, sep='\t', header=True):
                 self._insts[cwid] = Insts(cwid, name, dept)
         except ValueError:
             print(f"cant find any the details")
@@ -62,7 +68,7 @@ class Repository:
     def _get_grades(self, path : str)->None:
         """ Read from grade file and assign the values to appropriate student and instructor """
         try:
-            for std_cwid, course, grade, ins_cwid in file_reader(path, 4, sep='|', header=True):
+            for std_cwid, course, grade, ins_cwid in file_reader(path, 4, sep='\t', header=True):
                 if std_cwid in self._studs:
                     self._studs[std_cwid].add_course(course, grade)
                 else:
@@ -89,6 +95,16 @@ class Repository:
         except FileNotFoundError as f:
             raise FileNotFoundError(f)
 
+    def _student_summaty_grade(self,db_path):
+        db :sqlite3.Connection = sqlite3.connect(self.db_path)
+        queries = """SELECT S.Name,S.CWID,G.Course,G.Grade,I.Name
+                    FROM students11 AS S JOIN grades11 AS G ON S.CWID = G.StudentCWID
+                    JOIN instructors11 AS I ON G.InstructorCWID=I.CWID
+                    order by s.Name"""
+        for Name,CWID,Course,Grade,IName in db.execute(queries):
+            yield Name,CWID,Course,Grade,IName
+        
+
 
     def studs_table(self)->PrettyTable:
         """ Summary of student table """
@@ -110,6 +126,13 @@ class Repository:
         pt : PrettyTable= PrettyTable(field_names=MajorC.ptable_header)
         for major in self._majord.values():
             pt.add_row(major.ptable_row())
+        return pt
+
+    def student_grade_table(self)->PrettyTable:
+        """ Summary of student_grade table """
+        pt : PrettyTable= PrettyTable(field_names=['NAME','CWID','COURSE','GRADE','Instructor'])
+        for studs in self._student_summaty_grade(self.db_path):
+            pt.add_row(studs)
         return pt
 
 
@@ -205,14 +228,18 @@ class MajorC:
 
 def main()->None:
     """ Pass the directory to Repository class """
-    dire = 'D:\\810\\HW10'
-    o1:Repository=Repository(dire,True)
+    dire = 'D:\\810\\HW11'
+    db_path :str = 'D:\\810\\HW11\\hw11.db'
+    o1:Repository=Repository(dire,True,db_path)
     print("student summary")
     print(o1.studs_table())
     print("Instructor summary")
     print(o1.insts_table())
     print("major summary")
     print(o1.major_table())
+    print("major summary")
+    print(o1.student_grade_table())
+    
 
 if __name__ == '__main__':
     """ Run main function on start """
